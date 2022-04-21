@@ -155,6 +155,7 @@ cython_debug/
 # data and cached files
 data/
 nominatim_results/
+osrm_results/
 *.pkl
 
 # Internal documentation and publication

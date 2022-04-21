@@ -26,6 +26,8 @@ from descartes import PolygonPatch
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
+from hospital_geospacial import HOSPITALS, get_nearest_hospital
+
 ELLESLIE_RD = 94029
 CENTRAL_LATTITUDE = -42
 CENTRAL_LONGITUDE = 146.5
@@ -135,15 +137,22 @@ class Region:
             print(self.shape)
             raise
         self.record = shape_record.record
+        
+        self.nearest_hospital = get_nearest_hospital(self.centroid.x,
+                                                      self.centroid.y)
     
-    def make_patch(self,color, fill=True):
+    def make_patch(self,color, fill=True, alpha = 1):
         try:
             patch = PolygonPatch(self.shape,fc=(color if fill else "none"),
-                                 ec = color, linewidth = 0.5)
+                                 ec = color, linewidth = 0.5,
+                                 alpha = alpha)
         except:
             print(f"{self.record} set with color {color}")
             raise
         return patch
+    
+    def __repr__(self):
+        return str(self.id)
 
 class State:
     def __init__(self,statename, sourcefile):
@@ -157,9 +166,10 @@ class State:
                 pass
         self.fig=None
 
-    def plot_all_regions(self, cmap_callable = None, title = None, axes=False):
+    def plot_all_regions(self, cmap_callable = None, title = None, axes=False,
+                         alpha_callable = None):
         sns.set_style("white")
-        sns.set_context("paper")
+        sns.set_context("notebook")
         fig = plt.figure(tight_layout=True) 
         ax = fig.gca() 
         
@@ -174,8 +184,10 @@ class State:
 
         if cmap_callable==None:
             patches = [a.make_patch('k',fill=False) for i,a in enumerate(self.regions)]
-        else:
+        elif alpha_callable is None:
             patches = [a.make_patch(cmap_callable(a)) for a in self.regions]
+        else:
+            patches = [a.make_patch(cmap_callable(a), alpha = alpha_callable(a)) for a in self.regions]
         for patch in patches:
             ax.add_patch(patch)
         ax.axis('scaled')
@@ -207,15 +219,34 @@ class State:
         if self.fig is None:
             self.plot_all_regions()
         return self.fig.show()
+    
+    def __repr__(self):
+        return f"State object||{self.name}||{self.regions.__len__()} SA1 regions"
 
 
 
 tas_geom = State("Tasmania", CENSUSFILE)
-if __name__=="__main__":
+
+def show_hospital_locations():
     fig = tas_geom.plot_all_regions(title="Tasmanian Statistical Areas (Level 1)",
                                     axes=True) 
-    tas_geom.add_centroids()
+    tas_geom.ax.plot([float(h.long) for h in HOSPITALS], [float(h.lat) for h in HOSPITALS],'ro')
+    for hospital in HOSPITALS:
+        tas_geom.ax.text(hospital.long, hospital.lat+0.2, hospital.name,
+                         color = 'k',
+                         bbox = dict(facecolor="white",edgecolor="red",boxstyle="round"))
     fig.show()
+
+
+def show_geo_hospital_feeding():
+    fig = tas_geom.plot_all_regions(cmap_callable = lambda region:region.nearest_hospital.color) 
+    colors = [h.color for h in HOSPITALS]
+    f = lambda m,c: plt.plot([],[],marker=m, color=c, ls="none")[0]
+    handles = [f("s", color) for color in colors]
+    labels = [h.name for h in HOSPITALS]
+    legend = tas_geom.ax.legend(handles, labels, loc=3, framealpha=1, frameon=True)
+
+show_geo_hospital_feeding()           
 
 # plt.plot([s.long for s in all_tasmanian_stations],[s.lat for s in all_tasmanian_stations],
 #          'o', color = "red", ms = 5, alpha = 0.7)
